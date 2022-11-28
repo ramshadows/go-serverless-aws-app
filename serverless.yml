@@ -1,0 +1,124 @@
+# Welcome to Serverless!
+#
+# This file is the main config file for your service.
+# It's very minimal at this point and uses default values.
+# You can always add more config options for more control.
+# We've included some commented out config examples here.
+# Just uncomment any of them to get that config option.
+#
+# For full config options, check the docs:
+#    docs.serverless.com
+#
+# Happy Coding!
+
+service: go-serverless-app
+# app and org for use with dashboard.serverless.com
+app: go-serverless-app
+org: ramshadows
+
+# You can pin your service to only deploy with a specific Serverless version
+# Check out our docs for more details
+frameworkVersion: '^3.24.1'
+
+provider:
+  name: aws
+  runtime: go1.x
+
+  #memorySize: 512 # optional, in MB, default is 1024
+  timeout: 10 # optional, in seconds, default is 6
+
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+
+  tracing:
+    lambda: true
+    apiGateway: true
+
+  # Use these variables in the functions and resouorces section below. For example,
+  # ${self:provider.environment.ATTACHMENT_S3_BUCKET}
+  environment:
+    PROJECT_NAME: go-serverless-app
+    DYNAMODB_USERS_TABLE: Users-${self:provider.stage}
+    #USER_CREATED_AT_INDEX: CreatedAtIndex
+    #PASSWORD_CHANGE_AT: PasswordChangeAt
+    #ATTACHMENT_S3_BUCKET: serverless-c4-todo-images-ramshadows-${self:provider.stage}
+    #SIGNED_URL_EXPIRATION: 300
+
+  logs:
+    # Enable API Gateway logs
+    restApi: true
+
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - xray:PutTelemetryRecords
+            - xray:PutTraceSegments
+          Resource: '*'
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource: arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.DYNAMODB_USERS_TABLE}
+
+custom:
+  documentation:
+    api:
+      info:
+        version: '1.0.0'
+        title: go-serverless-api
+        description: go-serverless-api
+    
+      
+package:
+  patterns:
+    - ./bin/** # included
+    - ./api/**
+    - ./utils/**
+    - ./pkg/**
+    - '!.gitignore'
+    - '!.serverless'
+    - '!go.sum'
+
+functions:
+  CreateUser:
+    handler: bin/main
+    events:
+      - http:
+          path: cmd
+          method: post
+          cors: true
+              
+resources:
+  Resources:
+    # Add necessary AWS resources. You will need at least the following AWS resources
+    GatewayResponseDefault4XX:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'*'"
+          #gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+        ResponseType: DEFAULT_4XX
+        RestApiId:
+          Ref: ApiGatewayRestApi
+
+    #Create a DynamoDB table with local secondary index and a composite key
+    DynamoDBUsersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${self:provider.environment.DYNAMODB_USERS_TABLE}
+        
